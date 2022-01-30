@@ -28,6 +28,8 @@ var workGroup string
 var database string
 
 var outputMode string = "ascii"
+var ddlEnabled bool = false
+var showStats bool = false
 
 func ProcessCommand(command string) (bool, error) {
 	bits := strings.Split(command, " ")
@@ -39,6 +41,36 @@ func ProcessCommand(command string) (bool, error) {
 	case ".help":
 		DisplayHelp()
 		return true, nil
+	case ".ddl":
+		if len(bits) != 2 {
+			return false, errors.New(".ddl expects an argument")
+		} else {
+			switch bits[1] {
+			case "on":
+				ddlEnabled = true
+				return true, nil
+			case "off":
+				ddlEnabled = false
+				return true, nil
+			default:
+				return false, fmt.Errorf(".ddl expects either 'on' or 'off', '%s' is unknown", bits[1])
+			}
+		}
+	case ".stats":
+		if len(bits) != 2 {
+			return false, errors.New(".stats expects an argument")
+		} else {
+			switch bits[1] {
+			case "on":
+				showStats = true
+				return true, nil
+			case "off":
+				showStats = false
+				return true, nil
+			default:
+				return false, fmt.Errorf(".stats expects either 'on' or 'off', '%s' is unknown", bits[1])
+			}
+		}
 	case ".mode":
 		if len(bits) != 2 {
 			return false, errors.New(".mode expects an argument")
@@ -150,7 +182,24 @@ func main() {
 				// trim ; from text
 				text = text[:len(text)-1]
 				query = query + " " + text
+				query = strings.Trim(query, " \t")
 				mode = 0
+
+				// check if this is ddl, if so we need to see if ddl is enabled, if not we don't run
+				//fmt.Printf(strings.ToUpper(query))
+				if strings.HasPrefix(strings.ToUpper(query), "CREATE") ||
+					strings.HasPrefix(strings.ToUpper(query), "ALTER") ||
+					strings.HasPrefix(strings.ToUpper(query), "DROP") {
+
+					if !ddlEnabled {
+						fmt.Printf("Error: DDL not enabled\n")
+						mode = 0
+						query = ""
+						continue
+					}
+
+				}
+
 				// need to run query
 				id, queryErr := StartQueryExec(query, workGroup, database, cfg, ctx)
 				if queryErr != nil {
@@ -166,12 +215,16 @@ func main() {
 						PrettyPrintAwsError(getQueryErr)
 					} else {
 						if queryRes.Successful {
+							if showStats {
+								fmt.Printf("Stats: bytes scanned: %v, runtime: %v\n", *queryRes.Stats.DataScannedInBytes, *queryRes.Stats.EngineExecutionTimeInMillis)
+							}
+							//fmt.Printf("statment type = %s\n", queryRes.StmtType)
 							// now we need to get the results
 							rows, columns, getResultsErr := GetQueryResults(id, cfg, ctx)
 							if getResultsErr != nil {
 								PrettyPrintAwsError(getResultsErr)
 							} else {
-								OutputResults(rows, columns, outputMode == "csv")
+								OutputResults(rows, columns, outputMode == "csv", queryRes.StmtType)
 							}
 						}
 					}

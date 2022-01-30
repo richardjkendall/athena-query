@@ -13,6 +13,7 @@ import (
 type QuerySummary struct {
 	Successful bool
 	Stats      *types.QueryExecutionStatistics
+	StmtType   string
 }
 
 func StartQueryExec(query string, workgroup string, database string, cfg aws.Config, ctx context.Context) (string, error) {
@@ -53,6 +54,8 @@ func MonitorQuery(execId string, cfg aws.Config, ctx context.Context) (QuerySumm
 			return res, err
 		}
 		state := resp.QueryExecution.Status.State
+		stmtType := resp.QueryExecution.StatementType
+		res.StmtType = string(stmtType)
 		if state == "SUCCEEDED" {
 			res.Stats = resp.QueryExecution.Statistics
 			res.Successful = true
