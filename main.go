@@ -30,6 +30,8 @@ var database string
 var outputMode string = "ascii"
 var ddlEnabled bool = false
 var showStats bool = false
+var showHeader bool = true
+var outputFile string = ""
 
 func ProcessCommand(command string) (bool, error) {
 	bits := strings.Split(command, " ")
@@ -41,6 +43,29 @@ func ProcessCommand(command string) (bool, error) {
 	case ".help":
 		DisplayHelp()
 		return true, nil
+	case ".output":
+		if len(bits) != 2 {
+			outputFile = ""
+			return true, nil
+		} else {
+			outputFile = bits[1]
+			return true, nil
+		}
+	case ".header":
+		if len(bits) != 2 {
+			return false, errors.New(".header expects an argument")
+		} else {
+			switch bits[1] {
+			case "on":
+				showHeader = true
+				return true, nil
+			case "off":
+				showHeader = false
+				return true, nil
+			default:
+				return false, fmt.Errorf(".header expects either 'on' or 'off', '%s' is unknown", bits[1])
+			}
+		}
 	case ".ddl":
 		if len(bits) != 2 {
 			return false, errors.New(".ddl expects an argument")
@@ -186,7 +211,7 @@ func main() {
 				mode = 0
 
 				// check if this is ddl, if so we need to see if ddl is enabled, if not we don't run
-				//fmt.Printf(strings.ToUpper(query))
+				// TODO add any missing DDL prefixes
 				if strings.HasPrefix(strings.ToUpper(query), "CREATE") ||
 					strings.HasPrefix(strings.ToUpper(query), "ALTER") ||
 					strings.HasPrefix(strings.ToUpper(query), "DROP") {
@@ -224,7 +249,7 @@ func main() {
 							if getResultsErr != nil {
 								PrettyPrintAwsError(getResultsErr)
 							} else {
-								OutputResults(rows, columns, outputMode == "csv", queryRes.StmtType)
+								OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
 							}
 						}
 					}
