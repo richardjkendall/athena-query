@@ -16,6 +16,36 @@ type QuerySummary struct {
 	StmtType   string
 }
 
+/*func GetSchema(database string) (string, error) {
+	// get views (if they exist)
+}*/
+
+func CheckWorkGroup(workGroup string, cfg aws.Config, ctx context.Context) (bool, error) {
+	wg, err := GetWorkGroup(workGroup, cfg, ctx)
+	if err != nil {
+		return false, err
+	}
+	if wg.WorkGroup.Configuration.ResultConfiguration.OutputLocation == nil {
+		return false, nil
+	} else {
+		return true, nil
+	}
+}
+
+func GetWorkGroup(workGroup string, cfg aws.Config, ctx context.Context) (athena.GetWorkGroupOutput, error) {
+	client := athena.NewFromConfig(cfg)
+
+	var gwgi athena.GetWorkGroupInput
+	gwgi.WorkGroup = aws.String(workGroup)
+
+	resp, err := client.GetWorkGroup(ctx, &gwgi)
+	if err != nil {
+		return athena.GetWorkGroupOutput{}, err
+	}
+	return *resp, nil
+
+}
+
 func StartQueryExec(query string, workgroup string, database string, cfg aws.Config, ctx context.Context) (string, error) {
 	client := athena.NewFromConfig(cfg)
 

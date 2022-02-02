@@ -120,28 +120,35 @@ func main() {
 	// need to get the parameters
 	workGroupParam := flag.String("work-group", "primary", "Work group the query should be executed in")
 	databaseParam := flag.String("database", "", "Which database should be used for the query")
-	//saveConfig := flag.Bool("save", false, "Should the settings be saved?")
 	flag.Parse()
+
+	// print welcome
+	fmt.Printf("AthenaQuery %s\n", VERSION)
+	fmt.Println("Enter \".help\" for usage hints")
 
 	// check if config file exists
 	userHome, userHomeErr := os.UserHomeDir()
 	if userHomeErr != nil {
-		log.Fatal("Error: could not get home directory", userHomeErr)
+		fmt.Println("Error: could not get home directory", userHomeErr)
+		os.Exit(1)
 	}
 	mkdirError := os.MkdirAll(userHome+"/.athena-query", 0755)
 	if mkdirError != nil {
-		log.Fatal("Error: could not create .athena-query directory", mkdirError)
+		fmt.Println("Error: could not create .athena-query directory", mkdirError)
+		os.Exit(1)
 	}
 	configFile, configFileError := os.Open(userHome + "/.athena-query/config.json")
 	if configFileError != nil {
 		// there is no config file (or we could not read it), so we should use the parameters that have been
 		// provided, so lets check them
 		if *workGroupParam == "" {
-			log.Fatal("Error: 'work-group' should be specified")
+			fmt.Println("Error: 'work-group' should be specified")
+			os.Exit(1)
 		}
 		workGroup = *workGroupParam
 		if *databaseParam == "" {
-			log.Fatal("Error: 'database' should be specified")
+			fmt.Println("Error: 'database' should be specified")
+			os.Exit(1)
 		}
 		database = *databaseParam
 	} else {
@@ -152,9 +159,7 @@ func main() {
 		// TODO
 	}
 
-	// print welcome
-	fmt.Printf("AthenaQuery %s\n", VERSION)
-	fmt.Println("Enter \".help\" for usage hints")
+	// print AWS details
 	fmt.Printf("Using workgroup %s and database %s\n", workGroup, database)
 
 	// get AWS context
@@ -171,6 +176,17 @@ func main() {
 		log.Fatal("Error: could not get AWS caller identity", err)
 	}
 	fmt.Printf("Account ID: %s, Identity Arn: %s\n", aws.ToString(identity.Account), aws.ToString(identity.Arn))
+
+	// check workgroup
+	workGroupOkay, checkWgErr := CheckWorkGroup(workGroup, cfg, ctx)
+	if checkWgErr != nil {
+		PrettyPrintAwsError(checkWgErr)
+		os.Exit(1)
+	}
+	if !workGroupOkay {
+		fmt.Printf("Error: this workgroup '%s' has no default output location specified\n", workGroup)
+		os.Exit(1)
+	}
 
 	// into the main loop
 	reader := bufio.NewReader(os.Stdin)
