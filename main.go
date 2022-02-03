@@ -40,6 +40,10 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 		fmt.Println("Goodbye.")
 		os.Exit(0)
 		return true, nil
+	case ".exit":
+		fmt.Println("Goodbye.")
+		os.Exit(0)
+		return true, nil
 	case ".help":
 		DisplayHelp()
 		return true, nil

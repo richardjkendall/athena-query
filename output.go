@@ -82,6 +82,7 @@ func WriteToFile(fileName string, output string) (bool, error) {
 
 func DisplayHelp() {
 	fmt.Println(".ddl\t\tEnable or disable DDL statements 'CREATE', 'ALTER' and 'DROP'")
+	fmt.Println(".exit\t\tSynonym for quit")
 	fmt.Println(".file\t\tRun the commands in the file specified")
 	fmt.Println(".header\t\tTurn on or off display of result set headers (column names)")
 	fmt.Println(".help\t\tDisplay this message")
