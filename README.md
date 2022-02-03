@@ -15,6 +15,14 @@ You can type SQL queries at the prompt.  SQL queries end with a semi-colon ';'. 
 
 Special commands begin with a full-stop '.'.  Type `.help` to get a list of those available commands.
 
+## Requirements
+
+The tool needs the work-group to have an associated OutputLocation.  This is the S3 bucket where the query results and meta-data are stored.  If this also has encryption enabled with a customer managed key then the user/role being used by athena-query will need permissions to use that key for decryption.
+
+https://docs.aws.amazon.com/athena/latest/APIReference/API_ResultConfiguration.html
+
+The tool will test the work-group when it starts to ensure these settings are present.  If they are not the tool will exit.
+
 ## Outputs
 
 By default the tool outputs pretty-printed tables to STDOUT.  You can change this to CSV with the `.mode` command and you can redirect this to a file with the `.output` command.
