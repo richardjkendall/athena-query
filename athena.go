@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,9 +18,61 @@ type QuerySummary struct {
 	StmtType   string
 }
 
-/*func GetSchema(database string) (string, error) {
-	// get views (if they exist)
-}*/
+func GetSchema(database string, workGroup string, cfg aws.Config, ctx context.Context) (string, error) {
+	// get views
+	getViewsSql := fmt.Sprintf("select table_name, view_definition from information_schema.views where table_schema='%s'", database)
+	rows, _, err := RunQueryAndGetResults(getViewsSql, cfg, ctx)
+	if err != nil {
+		return "", err
+	}
+	views := map[string]int{}
+	for _, view := range rows[1:] {
+		fmt.Printf("CREATE VIEW %s AS\n", *view.Data[0].VarCharValue)
+		sql := strings.TrimRight(*view.Data[1].VarCharValue, "\r\n")
+		fmt.Printf("%s;\n\n", sql)
+		views[*view.Data[0].VarCharValue] = 1
+	}
+	// get tables
+	getTablesSql := fmt.Sprintf("select table_name from information_schema.tables where table_schema='%s'", database)
+	rows, _, err = RunQueryAndGetResults(getTablesSql, cfg, ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, table := range rows[1:] {
+		if _, exists := views[*table.Data[0].VarCharValue]; !exists {
+			getCreateTableSql := fmt.Sprintf("show create table %s", *table.Data[0].VarCharValue)
+			lines, _, getCreateTableErr := RunQueryAndGetResults(getCreateTableSql, cfg, ctx)
+			if getCreateTableErr != nil {
+				return "", getCreateTableErr
+			}
+			for _, line := range lines {
+				fmt.Println(*line.Data[0].VarCharValue)
+			}
+			fmt.Println("")
+		}
+	}
+	return "", nil
+}
+
+func RunQueryAndGetResults(sql string, cfg aws.Config, ctx context.Context) ([]types.Row, []types.ColumnInfo, error) {
+	queryId, queryErr := StartQueryExec(sql, workGroup, database, cfg, ctx)
+	if queryErr != nil {
+		return nil, nil, queryErr
+	}
+	queryRes, monitorErr := MonitorQuery(queryId, cfg, ctx)
+	if monitorErr != nil {
+		return nil, nil, monitorErr
+	}
+	if queryRes.Successful {
+		rows, columns, getResultsErr := GetQueryResults(queryId, cfg, ctx)
+		if getResultsErr != nil {
+			return nil, nil, getResultsErr
+		}
+		return rows, columns, nil
+	} else {
+		return nil, nil, nil
+	}
+}
 
 func CheckWorkGroup(workGroup string, cfg aws.Config, ctx context.Context) (bool, error) {
 	wg, err := GetWorkGroup(workGroup, cfg, ctx)

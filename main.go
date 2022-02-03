@@ -33,7 +33,7 @@ var showStats bool = false
 var showHeader bool = true
 var outputFile string = ""
 
-func ProcessCommand(command string) (bool, error) {
+func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, error) {
 	bits := strings.Split(command, " ")
 	switch bits[0] {
 	case ".quit":
@@ -42,6 +42,12 @@ func ProcessCommand(command string) (bool, error) {
 		return true, nil
 	case ".help":
 		DisplayHelp()
+		return true, nil
+	case ".schema":
+		_, err := GetSchema(database, workGroup, cfg, ctx)
+		if err != nil {
+			PrettyPrintAwsError(err)
+		}
 		return true, nil
 	case ".output":
 		if len(bits) != 2 {
@@ -214,7 +220,7 @@ func main() {
 		// check if this is a command
 		if mode == 0 && strings.HasPrefix(text, ".") {
 			// this is a command, so we need to process it
-			_, commandErr := ProcessCommand(text)
+			_, commandErr := ProcessCommand(text, cfg, ctx)
 			if commandErr != nil {
 				fmt.Printf("Error: %s\n", commandErr)
 			}
