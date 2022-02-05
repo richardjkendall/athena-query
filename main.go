@@ -3,11 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -16,13 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
-
-const VERSION string = "0.0.1"
-
-type SavedCfg struct {
-	WorkGroup string `json:"workgroup"`
-	Database  string `json:"database"`
-}
 
 var workGroup string
 var database string
@@ -47,6 +38,15 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 	case ".help":
 		DisplayHelp()
 		return true, nil
+	case ".save":
+		err := WriteConfig(database, workGroup)
+		if err != nil {
+			fmt.Println("Error: failed to write config", err)
+			return false, errors.New(".save failed")
+		} else {
+			fmt.Println("Saved config.")
+			return true, nil
+		}
 	case ".schema":
 		_, err := GetSchema(database, workGroup, cfg, ctx)
 		if err != nil {
@@ -128,7 +128,7 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 
 func main() {
 	// need to get the parameters
-	workGroupParam := flag.String("work-group", "primary", "Work group the query should be executed in")
+	workGroupParam := flag.String("work-group", "", "Work group the query should be executed in")
 	databaseParam := flag.String("database", "", "Which database should be used for the query")
 	flag.Parse()
 
@@ -137,20 +137,11 @@ func main() {
 	fmt.Println("Enter \".help\" for usage hints")
 
 	// check if config file exists
-	userHome, userHomeErr := os.UserHomeDir()
-	if userHomeErr != nil {
-		fmt.Println("Error: could not get home directory", userHomeErr)
+	savedCfg, cfgError := ReadConfig()
+	if cfgError != nil {
 		os.Exit(1)
 	}
-	mkdirError := os.MkdirAll(userHome+"/.athena-query", 0755)
-	if mkdirError != nil {
-		fmt.Println("Error: could not create .athena-query directory", mkdirError)
-		os.Exit(1)
-	}
-	configFile, configFileError := os.Open(userHome + "/.athena-query/config.json")
-	if configFileError != nil {
-		// there is no config file (or we could not read it), so we should use the parameters that have been
-		// provided, so lets check them
+	if savedCfg.Database == "" && savedCfg.WorkGroup == "" {
 		if *workGroupParam == "" {
 			fmt.Println("Error: 'work-group' should be specified")
 			os.Exit(1)
@@ -162,11 +153,18 @@ func main() {
 		}
 		database = *databaseParam
 	} else {
-		byteVal, _ := ioutil.ReadAll(configFile)
-		var cfg SavedCfg
-		json.Unmarshal(byteVal, &cfg)
-		// need to put the details into memory if they are available
-		// TODO
+		fmt.Println("Loaded saved configuration")
+		if *workGroupParam != "" {
+			// use the command line version
+			workGroup = *workGroupParam
+		} else {
+			workGroup = savedCfg.WorkGroup
+		}
+		if *databaseParam != "" {
+			database = *databaseParam
+		} else {
+			database = savedCfg.Database
+		}
 	}
 
 	// print AWS details
