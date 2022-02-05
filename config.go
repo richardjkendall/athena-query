@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-const VERSION string = "0.0.1"
+const VERSION string = "${version}"
 
 type SavedCfg struct {
 	WorkGroup string `json:"workgroup"`
