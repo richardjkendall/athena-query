@@ -22,7 +22,7 @@ jobs:
       env:
         REL: ${{ github.event.release.tag_name }}
       run: |
-        sed -e "s/\${version}/$REL/" config.go > config.go
+        sed -i .bak "s/\${version}/$REL/" config.go
   
     - name: Build
       uses: wangyoucao577/go-release-action@v1.22
