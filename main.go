@@ -19,6 +19,7 @@ var workGroup string
 var database string
 
 var outputMode string = "ascii"
+var jsonMode string = "array"
 var ddlEnabled bool = false
 var showStats bool = false
 var showHeader bool = true
@@ -107,7 +108,7 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 			}
 		}
 	case ".mode":
-		if len(bits) != 2 {
+		if len(bits) == 1 {
 			return false, errors.New(".mode expects an argument")
 		} else {
 			switch bits[1] {
@@ -117,8 +118,26 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 			case "ascii":
 				outputMode = "ascii"
 				return true, nil
+			case "json":
+				if len(bits) == 3 {
+					switch bits[2] {
+					case "array":
+						outputMode = "json"
+						jsonMode = "array"
+						return true, nil
+					case "objectperline":
+						outputMode = "json"
+						jsonMode = "objectperline"
+						return true, nil
+					default:
+						return false, fmt.Errorf("json mode '%s' is unknown", bits[2])
+					}
+				} else {
+					return false, fmt.Errorf("json mode expects a second argument either 'objectperline' or 'array'")
+				}
+
 			default:
-				return false, fmt.Errorf(".mode expects either 'ascii' or 'csv', '%s' is unknown", bits[1])
+				return false, fmt.Errorf(".mode expects either 'ascii', 'csv' or 'json', '%s' is unknown", bits[1])
 			}
 		}
 	default:
@@ -273,7 +292,14 @@ func main() {
 							if getResultsErr != nil {
 								PrettyPrintAwsError(getResultsErr)
 							} else {
-								OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
+								if outputMode == "json" {
+									ToJson(rows, columns, queryRes.StmtType, jsonMode)
+								} else {
+									err := OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
+									if err != nil {
+										PrettyPrintAwsError(err)
+									}
+								}
 							}
 						}
 					}

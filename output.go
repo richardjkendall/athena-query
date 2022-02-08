@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -8,6 +9,47 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/athena/types"
 	"github.com/jedib0t/go-pretty/v6/table"
 )
+
+func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMode string) error {
+	dict := []map[string]interface{}{}
+
+	// we skip the first row (column names) unless it is a utility output
+	start := 1
+	if qryType == "UTILITY" {
+		start = 0
+	}
+
+	for _, row := range rows[start:] {
+		data := map[string]interface{}{}
+		// for UTILITY type we need to split the first column by tabs first...
+		if qryType == "UTILITY" {
+			for i, col := range strings.Split(*row.Data[0].VarCharValue, "\t") {
+				if col != "" {
+					data[*columns[i].Name] = col
+				} else {
+					data[*columns[i].Name] = ""
+				}
+			}
+		} else {
+			for i, col := range row.Data {
+				if col.VarCharValue != nil {
+					data[*columns[i].Name] = *col.VarCharValue
+				} else {
+					data[*columns[i].Name] = ""
+				}
+			}
+		}
+		dict = append(dict, data)
+	}
+
+	j, err := json.Marshal(dict)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(j))
+	return nil
+
+}
 
 func OutputResults(rows []types.Row, columns []types.ColumnInfo, csv bool, header bool, outFile string, qryType string) error {
 	t := table.NewWriter()
