@@ -23,6 +23,14 @@ https://docs.aws.amazon.com/athena/latest/APIReference/API_ResultConfiguration.h
 
 The tool will test the work-group when it starts to ensure these settings are present.  If they are not the tool will exit.
 
+## Known Issues
+
+If you are using instance meta-data to obtain AWS credentials the tool does not pick up your AWS region.  In this configuration it will also not pick up the default AWS region from your local config (~/.aws/config) either.  When this happens the tool will not run.  To solve it, add the AWS_REGION variable ahead of the command e.g.
+
+```bash
+AWS_REGION=example athena-query ...
+```
+
 ## Outputs
 
 By default the tool outputs pretty-printed tables to STDOUT.  You can change this to CSV with the `.mode` command and you can redirect this to a file with the `.output` command.
