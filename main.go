@@ -125,15 +125,15 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 						outputMode = "json"
 						jsonMode = "array"
 						return true, nil
-					case "objectperline":
+					case "serde":
 						outputMode = "json"
-						jsonMode = "objectperline"
+						jsonMode = "serde"
 						return true, nil
 					default:
 						return false, fmt.Errorf("json mode '%s' is unknown", bits[2])
 					}
 				} else {
-					return false, fmt.Errorf("json mode expects a second argument either 'objectperline' or 'array'")
+					return false, fmt.Errorf("json mode expects a second argument either 'serde' or 'array'")
 				}
 
 			default:
@@ -293,8 +293,9 @@ func main() {
 								PrettyPrintAwsError(getResultsErr)
 							} else {
 								if outputMode == "json" {
-									ToJson(rows, columns, queryRes.StmtType, jsonMode)
+									ToJson(rows, columns, queryRes.StmtType, jsonMode, outputFile)
 								} else {
+
 									err := OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
 									if err != nil {
 										PrettyPrintAwsError(err)

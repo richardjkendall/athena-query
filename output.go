@@ -10,8 +10,9 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
-func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMode string) error {
+func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMode string, outFile string) error {
 	dict := []map[string]interface{}{}
+	output := ""
 
 	// we skip the first row (column names) unless it is a utility output
 	start := 1
@@ -42,11 +43,34 @@ func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMo
 		dict = append(dict, data)
 	}
 
-	j, err := json.Marshal(dict)
-	if err != nil {
-		return err
+	if jsonMode == "serde" {
+		for _, row := range dict {
+			j, err := json.Marshal(row)
+			if err != nil {
+				return err
+			}
+			output = output + string(j) + "\n"
+			//fmt.Println(string(j))
+		}
+	} else {
+		j, err := json.Marshal(dict)
+		if err != nil {
+			return err
+		}
+		output = string(j) + "\n"
+		//fmt.Println(string(j))
 	}
-	fmt.Println(string(j))
+
+	if outFile == "" {
+		fmt.Print(output)
+	} else {
+		// we are writing to a file
+		_, writeErr := WriteToFile(outFile, output)
+		if writeErr != nil {
+			return writeErr
+		}
+	}
+
 	return nil
 
 }
