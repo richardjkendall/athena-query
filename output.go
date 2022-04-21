@@ -50,7 +50,6 @@ func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMo
 				return err
 			}
 			output = output + string(j) + "\n"
-			//fmt.Println(string(j))
 		}
 	} else {
 		j, err := json.Marshal(dict)
@@ -58,7 +57,6 @@ func ToJson(rows []types.Row, columns []types.ColumnInfo, qryType string, jsonMo
 			return err
 		}
 		output = string(j) + "\n"
-		//fmt.Println(string(j))
 	}
 
 	if outFile == "" {

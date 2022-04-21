@@ -25,6 +25,9 @@ var showStats bool = false
 var showHeader bool = true
 var outputFile string = ""
 
+var mode = 0 // 0 means this is a new line, 1 means an extension of a previous line
+var query = ""
+
 func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, error) {
 	bits := strings.Split(command, " ")
 	switch bits[0] {
@@ -107,6 +110,21 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 				return false, fmt.Errorf(".stats expects either 'on' or 'off', '%s' is unknown", bits[1])
 			}
 		}
+	case ".file":
+		if len(bits) != 2 {
+			return false, errors.New(".file expects a filename as an argument")
+		} else {
+			mode = 0
+			query = ""
+			err := ReadFile(bits[1], cfg, ctx)
+			mode = 0
+			query = ""
+			if err != nil {
+				return false, err
+			} else {
+				return true, nil
+			}
+		}
 	case ".mode":
 		if len(bits) == 1 {
 			return false, errors.New(".mode expects an argument")
@@ -145,10 +163,106 @@ func ProcessCommand(command string, cfg aws.Config, ctx context.Context) (bool, 
 	}
 }
 
+func ReadFile(file string, cfg aws.Config, ctx context.Context) error {
+	f, err := os.OpenFile(file, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) > 0 {
+			SendLine(line, cfg, ctx)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SendLine(text string, cfg aws.Config, ctx context.Context) {
+	// check if this is a command
+	if mode == 0 && strings.HasPrefix(text, ".") {
+		// this is a command, so we need to process it
+		_, commandErr := ProcessCommand(text, cfg, ctx)
+		if commandErr != nil {
+			fmt.Printf("Error: %s\n", commandErr)
+		}
+	} else {
+		if strings.HasSuffix(text, ";") {
+			// trim ; from text
+			text = text[:len(text)-1]
+			query = query + " " + text
+			query = strings.Trim(query, " \t")
+			mode = 0
+
+			// check if this is ddl, if so we need to see if ddl is enabled, if not we don't run
+			// TODO add any missing DDL prefixes
+			if strings.HasPrefix(strings.ToUpper(query), "CREATE") ||
+				strings.HasPrefix(strings.ToUpper(query), "ALTER") ||
+				strings.HasPrefix(strings.ToUpper(query), "DROP") {
+
+				if !ddlEnabled {
+					fmt.Printf("Error: DDL not enabled\n")
+					mode = 0
+					query = ""
+				}
+
+			}
+
+			// need to run query
+			id, queryErr := StartQueryExec(query, workGroup, database, cfg, ctx)
+			if queryErr != nil {
+				// there's a problem
+				// print the error and reset
+				PrettyPrintAwsError(queryErr)
+				mode = 0
+				query = ""
+			} else {
+				fmt.Printf("Query id: %s\n", id)
+				queryRes, getQueryErr := MonitorQuery(id, cfg, ctx)
+				if getQueryErr != nil {
+					PrettyPrintAwsError(getQueryErr)
+				} else {
+					if queryRes.Successful {
+						if showStats {
+							fmt.Printf("Stats: bytes scanned: %v, runtime: %v\n", *queryRes.Stats.DataScannedInBytes, *queryRes.Stats.EngineExecutionTimeInMillis)
+						}
+						// now we need to get the results
+						rows, columns, getResultsErr := GetQueryResults(id, cfg, ctx)
+						if getResultsErr != nil {
+							PrettyPrintAwsError(getResultsErr)
+						} else {
+							if outputMode == "json" {
+								ToJson(rows, columns, queryRes.StmtType, jsonMode, outputFile)
+							} else {
+
+								err := OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
+								if err != nil {
+									PrettyPrintAwsError(err)
+								}
+							}
+						}
+					}
+				}
+			}
+			query = ""
+		} else {
+			mode = 1
+			query = query + " " + text
+		}
+	}
+}
+
 func main() {
 	// need to get the parameters
 	workGroupParam := flag.String("work-group", "", "Work group the query should be executed in")
 	databaseParam := flag.String("database", "", "Which database should be used for the query")
+	fileParam := flag.String("file", "", "File to be executed")
 	flag.Parse()
 
 	// print welcome
@@ -215,10 +329,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *fileParam != "" {
+		fmt.Printf("Executing: %s\n", *fileParam)
+		err := ReadFile(*fileParam, cfg, ctx)
+		if err != nil {
+			PrettyPrintAwsError(err)
+		}
+	}
+
 	// into the main loop
 	reader := bufio.NewReader(os.Stdin)
-	var mode = 0 // 0 means this is a new line, 1 means an extension of a previous line
-	var query = ""
 
 	for {
 		if mode == 0 {
@@ -238,79 +358,7 @@ func main() {
 			continue
 		}
 
-		// check if this is a command
-		if mode == 0 && strings.HasPrefix(text, ".") {
-			// this is a command, so we need to process it
-			_, commandErr := ProcessCommand(text, cfg, ctx)
-			if commandErr != nil {
-				fmt.Printf("Error: %s\n", commandErr)
-			}
-		} else {
-			if strings.HasSuffix(text, ";") {
-				// trim ; from text
-				text = text[:len(text)-1]
-				query = query + " " + text
-				query = strings.Trim(query, " \t")
-				mode = 0
-
-				// check if this is ddl, if so we need to see if ddl is enabled, if not we don't run
-				// TODO add any missing DDL prefixes
-				if strings.HasPrefix(strings.ToUpper(query), "CREATE") ||
-					strings.HasPrefix(strings.ToUpper(query), "ALTER") ||
-					strings.HasPrefix(strings.ToUpper(query), "DROP") {
-
-					if !ddlEnabled {
-						fmt.Printf("Error: DDL not enabled\n")
-						mode = 0
-						query = ""
-						continue
-					}
-
-				}
-
-				// need to run query
-				id, queryErr := StartQueryExec(query, workGroup, database, cfg, ctx)
-				if queryErr != nil {
-					// there's a problem
-					// print the error and reset
-					PrettyPrintAwsError(queryErr)
-					mode = 0
-					query = ""
-				} else {
-					fmt.Printf("Query id: %s\n", id)
-					queryRes, getQueryErr := MonitorQuery(id, cfg, ctx)
-					if getQueryErr != nil {
-						PrettyPrintAwsError(getQueryErr)
-					} else {
-						if queryRes.Successful {
-							if showStats {
-								fmt.Printf("Stats: bytes scanned: %v, runtime: %v\n", *queryRes.Stats.DataScannedInBytes, *queryRes.Stats.EngineExecutionTimeInMillis)
-							}
-							//fmt.Printf("statment type = %s\n", queryRes.StmtType)
-							// now we need to get the results
-							rows, columns, getResultsErr := GetQueryResults(id, cfg, ctx)
-							if getResultsErr != nil {
-								PrettyPrintAwsError(getResultsErr)
-							} else {
-								if outputMode == "json" {
-									ToJson(rows, columns, queryRes.StmtType, jsonMode, outputFile)
-								} else {
-
-									err := OutputResults(rows, columns, outputMode == "csv", showHeader, outputFile, queryRes.StmtType)
-									if err != nil {
-										PrettyPrintAwsError(err)
-									}
-								}
-							}
-						}
-					}
-				}
-				query = ""
-			} else {
-				mode = 1
-				query = query + " " + text
-			}
-		}
+		SendLine(text, cfg, ctx)
 
 	}
 
