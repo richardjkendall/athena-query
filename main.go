@@ -174,7 +174,9 @@ func ReadFile(file string, cfg aws.Config, ctx context.Context) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if len(line) > 0 {
-			SendLine(line, cfg, ctx)
+			if !strings.HasPrefix(line, "#") {
+				SendLine(line, cfg, ctx)
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
