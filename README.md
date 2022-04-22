@@ -2,7 +2,7 @@
 
 Command line utility for querying AWS Athena, seeks to emulate sqlite3.  It implements some similar commands (the . notation) as sqlite3.
 
-It provides an interactive shell where you can run SQL queries against AWS Athena.  The utility sends the query to Athena and then displays the results as a table or as CSV.
+It provides an interactive shell where you can run SQL queries against AWS Athena.  The utility sends the query to Athena and then displays the results as a plain-text table, CSV or JSON.  JSON mode can support the format needed by SeRdE.
 
 ## How to use
 
@@ -13,7 +13,7 @@ It provides an interactive shell where you can run SQL queries against AWS Athen
 
 You can type SQL queries at the prompt.  SQL queries end with a semi-colon ';'.  You can split SQL queries across multiple lines, just use the enter key.
 
-Special commands begin with a full-stop '.'.  Type `.help` to get a list of those available commands.
+Special commands begin with a full-stop `.`.  Type `.help` to get a list of those available commands.
 
 ## Requirements
 
@@ -33,4 +33,4 @@ AWS_REGION=example athena-query ...
 
 ## Outputs
 
-By default the tool outputs pretty-printed tables to STDOUT.  You can change this to CSV with the `.mode` command and you can redirect this to a file with the `.output` command.
+By default the tool outputs pretty-printed tables to STDOUT.  You can change this to CSV or JSON with the `.mode` command and you can redirect this to a file with the `.output` command.
